@@ -57,8 +57,8 @@ void set_bnd(int M, int N, int O, int b, float *x) {
 void lin_solve(int M, int N, int O, int b, float *x, float *x0, float a,
                float c) {
 
-  int jJump = 44;
-  int kJump = 1936;
+  int jJump = M+2;
+  int kJump = (M+2) * (N+2);
 
   for (int l = 0; l < LINEARSOLVERTIMES; l++) {
     for (int k = 1; k <= O; k++) {
@@ -66,10 +66,14 @@ void lin_solve(int M, int N, int O, int b, float *x, float *x0, float a,
         for (int i = 1; i <= M; i++) {
           int valor = IX(i, j, k);
           x[valor] = (x0[valor] +
-                            a * (x[valor - 1] + x[valor + 1] +
+                            a * (x[valor + 1] +
                                  x[valor - jJump] + x[valor + jJump] +
                                  x[valor - kJump] + x[valor + kJump])) /
                             c;
+        }
+        for (int i = 1; i <= M; i++) {
+          int valor = IX(i, j, k);
+          x[valor] = x[valor] + (a * (x[valor - 1]))/c;
         }
       }
     }
