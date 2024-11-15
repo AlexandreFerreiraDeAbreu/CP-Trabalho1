@@ -20,25 +20,28 @@ void add_source(int M, int N, int O, float *x, float *s, float dt) {
 }
 
 // Set boundary conditions
+// Spatial Locality Done
+// Removed one nested cycle
 void set_bnd(int M, int N, int O, int b, float *x) {
   int i, j;
 
   // Set boundary on faces
+  for (j = 1; j <= N; j++) {
   for (i = 1; i <= M; i++) {
-    for (j = 1; j <= N; j++) {
+
       x[IX(i, j, 0)] = b == 3 ? -x[IX(i, j, 1)] : x[IX(i, j, 1)];
       x[IX(i, j, O + 1)] = b == 3 ? -x[IX(i, j, O)] : x[IX(i, j, O)];
     }
   }
-  for (i = 1; i <= N; i++) {
-    for (j = 1; j <= O; j++) {
-      x[IX(0, i, j)] = b == 1 ? -x[IX(1, i, j)] : x[IX(1, i, j)];
+
+  for (j = 1; j <= O; j++) { 
+    for (i = 1; i <= N; i++) {
+    x[IX(0, i, j)] = b == 1 ? -x[IX(1, i, j)] : x[IX(1, i, j)];
       x[IX(M + 1, i, j)] = b == 1 ? -x[IX(M, i, j)] : x[IX(M, i, j)];
     }
-  }
-  for (i = 1; i <= M; i++) {
-    for (j = 1; j <= O; j++) {
-      x[IX(i, 0, j)] = b == 2 ? -x[IX(i, 1, j)] : x[IX(i, 1, j)];
+
+    for (i = 1; i <= M; i++) {
+    x[IX(i, 0, j)] = b == 2 ? -x[IX(i, 1, j)] : x[IX(i, 1, j)];
       x[IX(i, N + 1, j)] = b == 2 ? -x[IX(i, N, j)] : x[IX(i, N, j)];
     }
   }
@@ -53,33 +56,44 @@ void set_bnd(int M, int N, int O, int b, float *x) {
                                     x[IX(M + 1, N + 1, 1)]);
 }
 
-// Linear solve for implicit methods (diffusion)
-void lin_solve(int M, int N, int O, int b, float *x, float *x0, float a,
-               float c) {
-
-  int jJump = M+2;
-  int kJump = (M+2) * (N+2);
-
-  for (int l = 0; l < LINEARSOLVERTIMES; l++) {
-    for (int k = 1; k <= O; k++) {
-      for (int j = 1; j <= N; j++) {
+// red-black solver with convergence check
+void lin_solve(int M, int N, int O, int b, float *x, float *x0, float a, float c) {
+    float tol = 1e-7, max_c, old_x, change;
+    int l = 0;
+    
+    do {
+        max_c = 0.0f;
         for (int i = 1; i <= M; i++) {
-          int valor = IX(i, j, k);
-          x[valor] = (x0[valor] +
-                            a * (x[valor + 1] +
-                                 x[valor - jJump] + x[valor + jJump] +
-                                 x[valor - kJump] + x[valor + kJump])) /
-                            c;
+            for (int j = 1; j <= N; j++) {
+                 for (int k = 1 + (i+j)%2; k <= O; k+=2) {
+                    old_x = x[IX(i, j, k)];
+                    x[IX(i, j, k)] = (x0[IX(i, j, k)] +
+                                      a * (x[IX(i - 1, j, k)] + x[IX(i + 1, j, k)] +
+                                           x[IX(i, j - 1, k)] + x[IX(i, j + 1, k)] +
+                                           x[IX(i, j, k - 1)] + x[IX(i, j, k + 1)])) /c;
+                    change = fabs(x[IX(i, j, k)] - old_x);
+                    if(change > max_c) max_c = change;
+                }
+            }
         }
+        
         for (int i = 1; i <= M; i++) {
-          int valor = IX(i, j, k);
-          x[valor] = x[valor] + (a * (x[valor - 1]))/c;
+            for (int j = 1; j <= N; j++) {
+                for (int k = 1 + (i+j+1)%2; k <= O; k+=2) {
+                    old_x = x[IX(i, j, k)];
+                    x[IX(i, j, k)] = (x0[IX(i, j, k)] +
+                                      a * (x[IX(i - 1, j, k)] + x[IX(i + 1, j, k)] +
+                                           x[IX(i, j - 1, k)] + x[IX(i, j + 1, k)] +
+                                           x[IX(i, j, k - 1)] + x[IX(i, j, k + 1)])) /c;
+                    change = fabs(x[IX(i, j, k)] - old_x);
+                    if(change > max_c) max_c = change;
+                }
+            }
         }
-      }
-    }
-    set_bnd(M, N, O, b, x);
-  }
+        set_bnd(M, N, O, b, x);
+    } while (max_c > tol && ++l < 20);
 }
+
 
 // Diffusion step (uses implicit method)
 void diffuse(int M, int N, int O, int b, float *x, float *x0, float diff,
@@ -90,13 +104,15 @@ void diffuse(int M, int N, int O, int b, float *x, float *x0, float diff,
 }
 
 // Advection step (uses velocity field to move quantities)
+// Spatial Locality Done
 void advect(int M, int N, int O, int b, float *d, float *d0, float *u, float *v,
             float *w, float dt) {
   float dtX = dt * M, dtY = dt * N, dtZ = dt * O;
 
+  for (int k = 1; k <= O; k++) {
+  for (int j = 1; j <= N; j++) {
   for (int i = 1; i <= M; i++) {
-    for (int j = 1; j <= N; j++) {
-      for (int k = 1; k <= O; k++) {
+
         float x = i - dtX * u[IX(i, j, k)];
         float y = j - dtY * v[IX(i, j, k)];
         float z = k - dtZ * w[IX(i, j, k)];
@@ -136,11 +152,14 @@ void advect(int M, int N, int O, int b, float *d, float *d0, float *u, float *v,
 
 // Projection step to ensure incompressibility (make the velocity field
 // divergence-free)
+// Spatial Locality Done
 void project(int M, int N, int O, float *u, float *v, float *w, float *p,
              float *div) {
+
+  for (int k = 1; k <= O; k++) {
+  for (int j = 1; j <= N; j++) {
   for (int i = 1; i <= M; i++) {
-    for (int j = 1; j <= N; j++) {
-      for (int k = 1; k <= O; k++) {
+
         div[IX(i, j, k)] =
             -0.5f *
             (u[IX(i + 1, j, k)] - u[IX(i - 1, j, k)] + v[IX(i, j + 1, k)] -
@@ -155,12 +174,14 @@ void project(int M, int N, int O, float *u, float *v, float *w, float *p,
   set_bnd(M, N, O, 0, p);
   lin_solve(M, N, O, 0, p, div, 1, 6);
 
+  for (int k = 1; k <= O; k++) {
+  for (int j = 1; j <= N; j++) {
   for (int i = 1; i <= M; i++) {
-    for (int j = 1; j <= N; j++) {
-      for (int k = 1; k <= O; k++) {
-        u[IX(i, j, k)] -= 0.5f * (p[IX(i + 1, j, k)] - p[IX(i - 1, j, k)]);
-        v[IX(i, j, k)] -= 0.5f * (p[IX(i, j + 1, k)] - p[IX(i, j - 1, k)]);
-        w[IX(i, j, k)] -= 0.5f * (p[IX(i, j, k + 1)] - p[IX(i, j, k - 1)]);
+       int idx = IX(i, j, k);
+
+        u[idx] -= 0.5f * (p[IX(i + 1, j, k)] - p[IX(i - 1, j, k)]);
+        v[idx] -= 0.5f * (p[IX(i, j + 1, k)] - p[IX(i, j - 1, k)]);
+        w[idx] -= 0.5f * (p[IX(i, j, k + 1)] - p[IX(i, j, k - 1)]);
       }
     }
   }
