@@ -1,5 +1,6 @@
 #include "fluid_solver.h"
 #include <cmath>
+#include<omp.h>
 
 #define IX(i, j, k) ((i) + (M + 2) * (j) + (M + 2) * (N + 2) * (k))
 #define SWAP(x0, x)                                                            \
@@ -63,6 +64,7 @@ void lin_solve(int M, int N, int O, int b, float *x, float *x0, float a, float c
     
     do {
         max_c = 0.0f;
+        #pragma omp parallel for reduction(max:max_c) private(old_x, change)
         for (int i = 1; i <= M; i++) {
             for (int j = 1; j <= N; j++) {
                  for (int k = 1 + (i+j)%2; k <= O; k+=2) {
@@ -77,6 +79,7 @@ void lin_solve(int M, int N, int O, int b, float *x, float *x0, float a, float c
             }
         }
         
+        #pragma omp parallel for reduction(max:max_c) private(old_x, change)
         for (int i = 1; i <= M; i++) {
             for (int j = 1; j <= N; j++) {
                 for (int k = 1 + (i+j+1)%2; k <= O; k+=2) {
