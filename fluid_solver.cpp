@@ -1,6 +1,6 @@
 #include "fluid_solver.h"
 #include <cmath>
-#include<omp.h>
+#include <omp.h>
 
 #define IX(i, j, k) ((i) + (M + 2) * (j) + (M + 2) * (N + 2) * (k))
 #define SWAP(x0, x)                                                            \
@@ -15,6 +15,7 @@
 // Add sources (density or velocity)
 void add_source(int M, int N, int O, float *x, float *s, float dt) {
   int size = (M + 2) * (N + 2) * (O + 2);
+  #pragma omp parallel for
   for (int i = 0; i < size; i++) {
     x[i] += dt * s[i];
   }
@@ -27,6 +28,9 @@ void set_bnd(int M, int N, int O, int b, float *x) {
   int i, j;
 
   // Set boundary on faces
+  #pragma omp parallel 
+  {
+  #pragma omp for collapse(2) schedule(static)
   for (j = 1; j <= N; j++) {
   for (i = 1; i <= M; i++) {
 
@@ -35,18 +39,22 @@ void set_bnd(int M, int N, int O, int b, float *x) {
     }
   }
 
+  #pragma omp for collapse(2) schedule(static)
   for (j = 1; j <= O; j++) { 
     for (i = 1; i <= N; i++) {
     x[IX(0, i, j)] = b == 1 ? -x[IX(1, i, j)] : x[IX(1, i, j)];
       x[IX(M + 1, i, j)] = b == 1 ? -x[IX(M, i, j)] : x[IX(M, i, j)];
     }
+  }
 
+  #pragma omp for collapse(2) schedule(static)
+  for (j = 1; j <= O; j++) {
     for (i = 1; i <= M; i++) {
     x[IX(i, 0, j)] = b == 2 ? -x[IX(i, 1, j)] : x[IX(i, 1, j)];
       x[IX(i, N + 1, j)] = b == 2 ? -x[IX(i, N, j)] : x[IX(i, N, j)];
     }
   }
-
+  }
   // Set corners
   x[IX(0, 0, 0)] = 0.33f * (x[IX(1, 0, 0)] + x[IX(0, 1, 0)] + x[IX(0, 0, 1)]);
   x[IX(M + 1, 0, 0)] =
@@ -57,6 +65,7 @@ void set_bnd(int M, int N, int O, int b, float *x) {
                                     x[IX(M + 1, N + 1, 1)]);
 }
 
+// Linear solve for implicit methods (diffusion)
 // red-black solver with convergence check
 void lin_solve(int M, int N, int O, int b, float *x, float *x0, float a, float c) {
     float tol = 1e-7, max_c, old_x, change;
@@ -64,10 +73,12 @@ void lin_solve(int M, int N, int O, int b, float *x, float *x0, float a, float c
     
     do {
         max_c = 0.0f;
-        #pragma omp parallel for collapse(2) schedule(static) reduction(max:max_c) private(old_x, change)
-        for (int i = 1; i <= M; i++) {
+	#pragma omp parallel 
+	{
+        #pragma omp for schedule(static) reduction(max:max_c) private(old_x, change)
+        for (int i = 1; i <= O; i++) {
             for (int j = 1; j <= N; j++) {
-                 for (int k = 1 + (i+j)%2; k <= O; k+=2) {
+                 for (int k = 1 + (i+j)%2; k <= M; k+=2) {
                     old_x = x[IX(i, j, k)];
                     x[IX(i, j, k)] = (x0[IX(i, j, k)] +
                                       a * (x[IX(i - 1, j, k)] + x[IX(i + 1, j, k)] +
@@ -78,11 +89,12 @@ void lin_solve(int M, int N, int O, int b, float *x, float *x0, float a, float c
                 }
             }
         }
+
         
-        #pragma omp parallel for collapse(2) schedule(static) reduction(max:max_c) private(old_x, change)
-        for (int i = 1; i <= M; i++) {
+        #pragma omp for schedule(static) reduction(max:max_c) private(old_x, change)
+        for (int k = 1; k <= O; k++) {
             for (int j = 1; j <= N; j++) {
-                for (int k = 1 + (i+j+1)%2; k <= O; k+=2) {
+                for (int i = 1 + (k+j+1)%2; i <= M; i+=2) {
                     old_x = x[IX(i, j, k)];
                     x[IX(i, j, k)] = (x0[IX(i, j, k)] +
                                       a * (x[IX(i - 1, j, k)] + x[IX(i + 1, j, k)] +
@@ -93,6 +105,7 @@ void lin_solve(int M, int N, int O, int b, float *x, float *x0, float a, float c
                 }
             }
         }
+	}
         set_bnd(M, N, O, b, x);
     } while (max_c > tol && ++l < 20);
 }
@@ -112,7 +125,6 @@ void advect(int M, int N, int O, int b, float *d, float *d0, float *u, float *v,
             float *w, float dt) {
   float dtX = dt * M, dtY = dt * N, dtZ = dt * O;
 
-  #pragma omp parallel for 
   for (int k = 1; k <= O; k++) {
   for (int j = 1; j <= N; j++) {
   for (int i = 1; i <= M; i++) {
