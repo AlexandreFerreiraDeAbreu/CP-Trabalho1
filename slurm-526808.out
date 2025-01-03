@@ -1,0 +1,22 @@
+==40684== NVPROF is profiling process 40684, command: ./fluid_sim
+==40684== Warning: Profiling results might be incorrect with current version of nvcc compiler used to compile cuda app. Compile with nvcc compiler 9.0 or later version to get correct profiling results. Ignore this warning if code is already compiled with the recommended nvcc version 
+Total density after 100 timesteps: 0
+==40684== Profiling application: ./fluid_sim
+==40684== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   74.44%  13.3961s      1200  11.163ms  5.6243ms  15.542ms  [CUDA memcpy HtoD]
+                   15.77%  2.83713s      1658  1.7112ms  1.7040ms  1.7431ms  lin_solver_kernel(float*, float*, int, int, int, float, float, float*, int)
+                    6.17%  1.11004s      1429  776.79us  11.679us  2.4363ms  [CUDA memcpy DtoH]
+                    3.62%  652.29ms       829  786.84us  785.57us  788.03us  reduce_max(float*, float*, int)
+      API calls:   80.44%  19.4643s      2629  7.4037ms  1.6344ms  16.431ms  cudaMemcpy
+                   15.90%  3.84857s      2400  1.6036ms  146.06us  3.1366ms  cudaFree
+                    3.39%  821.42ms      2400  342.26us  146.73us  235.81ms  cudaMalloc
+                    0.25%  60.315ms      2487  24.252us  7.0890us  164.19us  cudaLaunchKernel
+                    0.00%  1.0307ms      1658     621ns     202ns  43.597us  cudaGetLastError
+                    0.00%  786.30us       202  3.8920us     285ns  170.49us  cuDeviceGetAttribute
+                    0.00%  781.73us         2  390.86us  382.76us  398.97us  cuDeviceTotalMem
+                    0.00%  183.77us         2  91.885us  33.747us  150.02us  cuDeviceGetName
+                    0.00%  24.212us         2  12.106us  5.1920us  19.020us  cuDeviceGetPCIBusId
+                    0.00%  3.1650us         4     791ns     395ns  1.4200us  cuDeviceGet
+                    0.00%  2.9230us         3     974ns     385ns  1.6350us  cuDeviceGetCount
+                    0.00%  1.0970us         2     548ns     420ns     677ns  cuDeviceGetUuid

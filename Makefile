@@ -1,11 +1,23 @@
-CPP = g++ -Wall -pg -Ofast -fopenmp -ftree-vectorize -msse4 -mavx -funroll-loops -fno-omit-frame-pointer
+CPP = nvcc -arch=compute_35 -code=sm_35 -Wno-deprecated-gpu-targets -Xcompiler "-Ofast -ftree-vectorize -msse4 -mavx -fopenmp"
 
-SRCS = main.cpp fluid_solver.cpp EventManager.cpp
+SRCS = Src/main.cpp Src/fluid_solver.cu Src/EventManager.cpp
 
-all:
+
+all: phase2
+
+phase2:
 	$(CPP) $(SRCS) -o fluid_sim
 
 clean:
 	@echo Cleaning up...
-	@rm fluid
+	@rm fluid_sim
 	@echo Done.
+
+runseq .ONESHELL:
+	export OMP_NUM_THREADS=1
+	
+	./fluid_sim
+
+runpar:
+	export OMP_NUM_THREADS=20
+	./fluid_sim
